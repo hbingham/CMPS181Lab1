@@ -38,6 +38,8 @@ public:
 	unsigned readPageCounter;
 	unsigned writePageCounter;
 	unsigned appendPageCounter;
+	FILE *fd;
+
 	
     FileHandle();                                                    	// Default constructor
     ~FileHandle();                                                   	// Destructor
