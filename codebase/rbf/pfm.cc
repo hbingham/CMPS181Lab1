@@ -43,7 +43,7 @@ RC PagedFileManager::destroyFile(const string &fileName)
     {
        return 0;
     }
-    return -1; //file already exists, so return error number
+    return -1; //file doesnt exist, so return error number
 }
 
 
