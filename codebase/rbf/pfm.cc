@@ -63,6 +63,7 @@ RC PagedFileManager::closeFile(FileHandle &fileHandle)
 {
     if (fclose(fileHandle.fd) == 0)
 {
+        fileHandle.fd = NULL;
         return 0;
 }
     return -1;
@@ -84,7 +85,7 @@ FileHandle::~FileHandle()
 
 RC FileHandle::readPage(PageNum pageNum, void *data)
 {
-    fseek(fd, PAGE_SIZE*pageNum, SEEK_CUR);
+    fseek(fd, PAGE_SIZE*pageNum, SEEK_SET);
     fread(data, sizeof(char), PAGE_SIZE, fd);
     readPageCounter++;
     return 0;
@@ -93,15 +94,15 @@ RC FileHandle::readPage(PageNum pageNum, void *data)
 
 RC FileHandle::writePage(PageNum pageNum, const void *data)
 {
-    printf("STATES HERESSS\n");
     if (getNumberOfPages() <= pageNum) //append page if it doesnt exist
 {
+       printf("Appended when write is called\n");
        appendPage(data);
 }
     else //write over page if it exists
 {
       printf("makes sense\n");
-      fseek(fd, sizeof(char) *PAGE_SIZE*pageNum, SEEK_CUR);
+      fseek(fd, PAGE_SIZE*pageNum, SEEK_SET);
       fwrite(data, sizeof(char), PAGE_SIZE, fd);
       fflush(fd);
 }
@@ -122,7 +123,9 @@ RC FileHandle::appendPage(const void *data)
 
 unsigned FileHandle::getNumberOfPages()
 {
-    return appendPageCounter;
+    fseek(fd, 0, SEEK_END);
+    size_t fileSize = ftell(fd);
+    return fileSize/PAGE_SIZE;
 }
 
 
@@ -134,16 +137,3 @@ RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePage
     return 0;
 }
 
-
-
-RC FileHandle::incPageCount()
-{
-    fseek(fd, 0, SEEK_SET);
-    unsigned int pageCount;
-    fread(&pageCount, sizeof(unsigned), 1, fd);
-    pageCount++;
-    fseek(fd, 0, SEEK_SET);
-    fwrite(&pageCount, sizeof(unsigned), 1, fd);
-    fflush(fd);
-    return 0;
-}
