@@ -29,10 +29,7 @@ RC PagedFileManager::createFile(const string &fileName)
 {
     if(access(fileName.c_str(), F_OK ) == -1)
     {
-       unsigned int pageCount = 0;
        FILE *fp = fopen(fileName.c_str(), "w+b");
-       fwrite(&pageCount, sizeof(unsigned), 1, fp);
-       fseek(fp, 0, SEEK_SET);
        fclose(fp);
        return 0;
     }
@@ -87,13 +84,29 @@ FileHandle::~FileHandle()
 
 RC FileHandle::readPage(PageNum pageNum, void *data)
 {
-    return -1;
+    fseek(fd, PAGE_SIZE*pageNum, SEEK_CUR);
+    fread(data, sizeof(char), PAGE_SIZE, fd);
+    readPageCounter++;
+    return 0;
 }
 
 
 RC FileHandle::writePage(PageNum pageNum, const void *data)
 {
-    return -1;
+    printf("STATES HERESSS\n");
+    if (getNumberOfPages() <= pageNum) //append page if it doesnt exist
+{
+       appendPage(data);
+}
+    else //write over page if it exists
+{
+      printf("makes sense\n");
+      fseek(fd, sizeof(char) *PAGE_SIZE*pageNum, SEEK_CUR);
+      fwrite(data, sizeof(char), PAGE_SIZE, fd);
+      fflush(fd);
+}
+    writePageCounter++;
+    return 0;
 }
 
 
@@ -101,7 +114,7 @@ RC FileHandle::appendPage(const void *data)
 {
     fseek(fd, 0, SEEK_END);
     fwrite(data, sizeof(char), PAGE_SIZE, fd);
-    incPageCount();
+    fflush(fd);
     appendPageCounter++;
     return 0;
 }
@@ -109,10 +122,7 @@ RC FileHandle::appendPage(const void *data)
 
 unsigned FileHandle::getNumberOfPages()
 {
-    fseek(fd, 0, SEEK_SET);
-    unsigned int pageNum;
-    fread(&pageNum, sizeof(unsigned), 1, fd);
-    return pageNum;
+    return appendPageCounter;
 }
 
 
@@ -134,5 +144,6 @@ RC FileHandle::incPageCount()
     pageCount++;
     fseek(fd, 0, SEEK_SET);
     fwrite(&pageCount, sizeof(unsigned), 1, fd);
+    fflush(fd);
     return 0;
 }
