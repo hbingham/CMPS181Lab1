@@ -16,6 +16,16 @@ int checkNull(char* data,int fieldNumber)
    return nullVal;
 }
 
+int makePage(FileHandle &fileHandle)
+{
+    int zero = 0;
+    char* prepData = (char*)malloc(PAGE_SIZE * sizeof(char));
+    memcpy(prepData + PAGE_SIZE - sizeof(int), &zero, sizeof(int));
+    memcpy(prepData + PAGE_SIZE - sizeof(int) * 2, &zero, sizeof(int));
+    fileHandle.appendPage(prepData);
+    return 0;
+}
+
 RecordBasedFileManager* RecordBasedFileManager::instance()
 {
     if(!_rbf_manager)
@@ -49,12 +59,105 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
 }
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid) {
-    
-    return -1;
+    unsigned pageCount = fileHandle.getNumberOfPages();
+    int slotCount = 0;
+    int freeStart = 0;
+    if (pageCount == 0) makePage(fileHandle);//if no pages exist, make a page
+//read in page from file
+    char* modPage = (char*)malloc(PAGE_SIZE * sizeof(char));
+    fileHandle.readPage(pageCount-1, modPage);
+//get slotcount and freespace from page
+    memcpy(&slotCount, modPage + PAGE_SIZE - sizeof(int) * 2, sizeof(int));
+    memcpy(&freeStart, modPage + PAGE_SIZE - sizeof(int), sizeof(int));
+
+    int fieldCount = recordDescriptor.size();
+    int nullOffset = ceil((double) fieldCount/8);
+    char* dataCopy = (char*)data;
+
+    char* record = (char*)malloc(PAGE_SIZE * sizeof(char));
+    memcpy(record, &dataCopy[0], sizeof(char) * nullOffset);
+    int recordLen = nullOffset;
+    for(int i = 0; i < fieldCount; i++)
+{
+       if (checkNull(dataCopy, i) ==0)
+       {
+       switch(recordDescriptor[i].type)
+       {
+          case TypeInt: {
+             memcpy(record + recordLen, &dataCopy[recordLen], sizeof(int));
+             recordLen += sizeof(int);
+             break;
+          }
+          case TypeReal: {
+             memcpy(record + recordLen, &dataCopy[recordLen], sizeof(int));
+             recordLen += sizeof(float);
+             break;
+          }
+          case TypeVarChar: {
+             int length;
+             memcpy(&length, &dataCopy[recordLen], sizeof(int));
+             memcpy(record + recordLen, &dataCopy[recordLen], sizeof(int));
+             recordLen += sizeof(int);
+             char* varChar = new char[length + 1];
+             memcpy(record + recordLen, &dataCopy[recordLen], length);
+             varChar[length] = '\0';
+             recordLen += length;
+             break;
+          }
+       }
+       }
+}
+
+
+    int freeSpace = PAGE_SIZE - (sizeof(int)*2 + sizeof(int)*(slotCount + 1) + freeStart);
+    if(recordLen > freeSpace)//if there is not enough space on the page, make a new one
+{
+       makePage(fileHandle);
+       pageCount++;
+       fileHandle.readPage(pageCount-1, modPage);
+       slotCount = 0;
+       freeStart = 0;
+}
+    slotCount++;
+    memcpy(modPage + freeStart, record, recordLen); //copy data
+//following line copies data offset to slot
+    memcpy(modPage + PAGE_SIZE - ((sizeof(int)*2) + (sizeof(int)*slotCount)), &freeStart, sizeof(int));
+
+    freeStart+= recordLen;
+    memcpy(modPage + PAGE_SIZE - sizeof(int), &freeStart, sizeof(int));
+    memcpy(modPage + PAGE_SIZE - sizeof(int) * 2, &slotCount, sizeof(int));
+    fileHandle.writePage(pageCount -1, modPage);
+
+    rid.pageNum = pageCount;
+    rid.slotNum = slotCount;
+    return 0;
 }
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data) {
-    return -1;
+    int fieldCount = recordDescriptor.size();
+    int offset = ceil((double) fieldCount/8);
+    unsigned pageCount = fileHandle.getNumberOfPages();
+    int recStart = 0;
+    int recEnd = 0;
+    int slotCount = 0;
+
+
+    char* modPage = (char*)malloc(PAGE_SIZE * sizeof(char));
+    fileHandle.readPage(rid.pageNum, modPage);
+    memcpy(&recStart, modPage + PAGE_SIZE - (sizeof(int) * (2+rid.slotNum)), sizeof(int));
+    memcpy(&slotCount, modPage + PAGE_SIZE - sizeof(int) * 2, sizeof(int));
+
+    if(slotCount == rid.slotNum)
+{
+       memcpy(&recEnd, modPage + PAGE_SIZE - sizeof(int), sizeof(int));
+}
+    else
+{
+       memcpy(&recEnd, modPage + PAGE_SIZE - (sizeof(int) * (3+rid.slotNum)), sizeof(int));
+}
+    printf("Recstart: %d recend: %d\n", recStart, recEnd);
+    memcpy(&data, modPage + recStart, recEnd-recStart);
+    return 0;
 }
 
 RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor, const void *data) {

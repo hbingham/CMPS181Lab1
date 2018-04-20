@@ -96,12 +96,10 @@ RC FileHandle::writePage(PageNum pageNum, const void *data)
 {
     if (getNumberOfPages() <= pageNum) //append page if it doesnt exist
 {
-       printf("Appended when write is called\n");
        appendPage(data);
 }
     else //write over page if it exists
 {
-      printf("makes sense\n");
       fseek(fd, PAGE_SIZE*pageNum, SEEK_SET);
       fwrite(data, sizeof(char), PAGE_SIZE, fd);
       fflush(fd);
